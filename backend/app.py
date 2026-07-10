@@ -5,6 +5,8 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from bs4 import BeautifulSoup
 from pymongo import MongoClient
+import logging
+import sys
 import time
 import os
 import json
@@ -16,8 +18,25 @@ import google.generativeai as genai
 # Load environment variables from .env file
 load_dotenv()
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("matcha.backend")
+
+# Fail fast with a clear message instead of letting routes hang for ~30s
+# on an unconfigured MongoClient or silently no-op on a missing Gemini key.
+REQUIRED_ENV = ["MONGODB_URI", "GEMINI_API_KEY"]
+_missing = [k for k in REQUIRED_ENV if not os.environ.get(k)]
+if _missing:
+    sys.exit(
+        f"Missing required environment variables: {', '.join(_missing)}\n"
+        "Copy backend/.env.example to backend/.env and fill in the values."
+    )
+
 app = Flask(__name__)
-CORS(app)  # Enable CORS for React frontend
+
+# CORS: scope to a single, env-driven allowed origin instead of accepting
+# every origin. Defaults to the local Vite dev server.
+ALLOWED_ORIGIN = os.getenv("ALLOWED_ORIGIN", "http://localhost:5173")
+CORS(app, origins=[ALLOWED_ORIGIN])
 
 # MongoDB configuration
 MONGODB_URI = os.getenv("MONGODB_URI")
@@ -271,7 +290,8 @@ def scrape_and_store():
         participants, hackathon_name, error = scraper.scrape_participants(hackathon_url, DEVPOST_COOKIES)
 
         if error:
-            return jsonify({'error': error}), 500
+            logger.error("Scrape failed for %s: %s", hackathon_url, error)
+            return jsonify({'error': 'Failed to scrape hackathon. See server logs for details.'}), 500
 
         if not participants:
             return jsonify({'error': 'No participants found'}), 404
@@ -304,7 +324,8 @@ def scrape_and_store():
         })
 
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.exception("Unhandled error in /api/scrape")
+        return jsonify({'error': 'Internal server error.'}), 500
 
 
 @app.route('/api/stats', methods=['GET'])
@@ -332,7 +353,8 @@ def get_stats():
         })
 
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.exception("Unhandled error in /api/stats")
+        return jsonify({'error': 'Internal server error.'}), 500
 
 
 @app.route('/api/find-teammates', methods=['POST'])
@@ -388,7 +410,8 @@ def find_teammates():
             matcher.close()
 
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.exception("Unhandled error in /api/find-teammates")
+        return jsonify({'error': 'Internal server error.'}), 500
 
 
 @app.route('/api/search-teammates', methods=['POST'])
@@ -443,7 +466,8 @@ def search_teammates():
             matcher.close()
 
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.exception("Unhandled error in /api/search-teammates")
+        return jsonify({'error': 'Internal server error.'}), 500
 
 
 @app.route('/api/generate-ideas', methods=['POST'])
@@ -574,8 +598,15 @@ Make sure the ideas are innovative, achievable within a hackathon timeframe, and
             })
 
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.exception("Unhandled error in /api/generate-ideas")
+        return jsonify({'error': 'Internal server error.'}), 500
 
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    # Debug mode (Werkzeug interactive debugger) is a remote-code-execution
+    # risk if ever reachable off localhost -- opt in explicitly via env var,
+    # default off.
+    debug_mode = os.getenv('FLASK_DEBUG', 'false').lower() in ('1', 'true', 'yes')
+    # Bind 0.0.0.0 so the app is reachable from outside its container;
+    # access is still gated by CORS (ALLOWED_ORIGIN) for browser clients.
+    app.run(host='0.0.0.0', debug=debug_mode, port=5000)
