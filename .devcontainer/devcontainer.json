@@ -1,0 +1,7 @@
+{
+  "name": "Matcha",
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "backend",
+  "workspaceFolder": "/app",
+  "forwardPorts": [5000, 5173, 27017]
+}
