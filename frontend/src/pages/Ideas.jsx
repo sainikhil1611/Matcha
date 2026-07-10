@@ -4,7 +4,9 @@ import { useAuth } from '../context/AuthContext'
 import Layout from '../components/Layout'
 import { ideaStorage } from '../utils/ideaStorage'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
+// Shares VITE_API_URL with services/api.js -- both point at the Flask
+// backend (backend/app.py). There is no separate Node API in this repo.
+const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:5000/api'
 
 // Mock hackathon data
 const MOCK_HACKATHON = {
@@ -105,11 +107,11 @@ function Ideas() {
         }),
       }).catch((fetchError) => {
         console.error('Fetch error details:', fetchError)
-        throw new Error(`Cannot connect to server at ${API_URL}. Make sure the backend is running: cd server && npm start`)
+        throw new Error(`Cannot connect to server at ${API_URL}. Make sure the backend (backend/app.py) is running.`)
       })
 
       if (!response) {
-        throw new Error('No response from server. Check if backend is running on port 3001.')
+        throw new Error(`No response from server. Check if the Flask backend is running at ${API_URL}.`)
       }
 
       console.log('Response status:', response.status, response.statusText)
@@ -133,7 +135,7 @@ function Ideas() {
     } catch (err) {
       console.error('Error generating ideas:', err)
       if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError') || err.name === 'TypeError') {
-        setError(`Cannot connect to server. Make sure the backend is running:\n1. Open a terminal\n2. Run: cd server && npm start\n3. Wait for "Server running on http://localhost:3001"`)
+        setError(`Cannot connect to server. Make sure the Flask backend is running:\n1. Open a terminal\n2. cd backend && python app.py\n3. Wait for it to listen on ${API_URL}`)
       } else {
         setError(err.message || 'Failed to generate ideas. Please try again.')
       }
