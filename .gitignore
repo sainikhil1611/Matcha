@@ -63,14 +63,11 @@ Thumbs.db
 *.json
 !package.json
 !package-lock.json
+!.devcontainer/devcontainer.json
 
 # Logs
 logs/
 *.log
-
-# Server data
-server/.env
-server/data/
 
 # Temporary files
 participants_page.html
